@@ -14,7 +14,7 @@
 #include "../include/laneDetector_utils.hpp"
 #include "../include/lsd.h"
 #include <string>
-#include "armadillo"
+// #include "armadillo"
 #include "../include/ransac.hpp"
 // #include "../include/mlesac.hpp"
 #include <nav_msgs/Odometry.h>
@@ -33,7 +33,6 @@ static const std::string OPENCV_WINDOW = "Image window";
 
 int flag=1;
 
-arma::vec curve;
 string image_name;
 
 int h, w, horizon, tranformedPoints0_lowerbound, tranformedPoints0_upperbound, point1_y, point2_x, horizon_offset;
@@ -354,8 +353,8 @@ vector<Point> detect_lanes(Mat img, bool debug = true)
         }
     }
 
-    namedWindow("lanes_by_ransac", WINDOW_NORMAL);
-    imshow("lanes_by_ransac", lanes_by_ransac);
+    // namedWindow("lanes_by_ransac", WINDOW_NORMAL);
+    // imshow("lanes_by_ransac", lanes_by_ransac);
 
     Mat frontview;
     warpPerspective(lanes_by_ransac, frontview, transform.inv(), Size(1920, 1200), INTER_NEAREST, BORDER_CONSTANT);
@@ -375,8 +374,8 @@ vector<Point> detect_lanes(Mat img, bool debug = true)
         }
     }
 
-    namedWindow("checking", WINDOW_NORMAL);
-    imshow("checking", lanes_by_ransac);
+    // namedWindow("checking", WINDOW_NORMAL);
+    // imshow("checking", lanes_by_ransac);
 
     scan_global = imageConvert(lanes_by_ransac);
 
@@ -425,7 +424,8 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
 
 sensor_msgs::LaserScan imageConvert(Mat img)    /// Input binary image for conversion to laserscan
 {
-	namedWindow("check", WINDOW_NORMAL);
+	cvtColor(img,img,CV_BGR2GRAY); // noob mistake :)
+    namedWindow("check", WINDOW_NORMAL);
     imshow("check", img);
 
     int row = img.rows;
@@ -451,7 +451,7 @@ sensor_msgs::LaserScan imageConvert(Mat img)    /// Input binary image for conve
 		{
 			if(img.at<uchar>(i, j) > 0)
 			{
-				float a = (j - col/2)/pixelPerMeter;
+				float a = (col/2 - j)/pixelPerMeter;
 				float b = (row - i)/pixelPerMeter + yshift;
 
 				double angle = atan(a/b);
