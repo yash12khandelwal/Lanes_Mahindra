@@ -1,0 +1,48 @@
+# h matrix
+# h_matrix:
+
+# horizon distance
+# horizon:180
+
+# warp perspective size
+# h_topx:
+# h_topy:
+
+# transformed points thresholding
+
+# height and width of gaussian image
+h: "30"
+w: "10"
+
+# variance of gaussian filter
+variance: "2.1"
+
+# hysterisThreshold
+hysterisThreshold_min: "0.39"
+hysterisThreshold_max: "0.45"
+
+# horizon
+horizon: "500"
+
+# erase lines in edge_features
+tranformedPoints0_lowerbound: "0"
+tranformedPoints0_upperbound: "900"
+
+point1_y: "400"
+point2_x: "600"
+
+# intersection region near horizon
+horizon_offset: "200"
+
+# cameraParameters
+pixelPerMeter : "250"
+cameraClearance: "0"
+
+# in check lane change function some x has been used, check what is this
+
+# in check primary lane there are many thresholding of choosing the points on the lane
+# understand the feature count used in these code
+
+# curve initialization parameters
+
+# 
