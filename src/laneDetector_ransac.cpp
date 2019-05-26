@@ -1,4 +1,54 @@
-#include "../include/include.hpp"
+#include <opencv2/opencv.hpp>
+#include <bits/stdc++.h>
+#include <iostream>
+#include <ros/ros.h>
+#include "geometry_msgs/Point.h"
+#include "geometry_msgs/Vector3.h"
+#include <image_transport/image_transport.h>
+#include <cv_bridge/cv_bridge.h>
+#include <fstream>
+#include "geometry_msgs/Polygon.h"
+// #include "armadillo"
+#include <nav_msgs/Odometry.h>
+#include "tf/tf.h"
+#include <sensor_msgs/LaserScan.h>
+#include <dynamic_reconfigure/server.h>
+#include <lanes/TutorialsConfig.h>
+
+
+#include <params.hpp>
+#include "lsd.cpp"
+#include "laneDetector_utils.cpp"
+#include "houghP.hpp"
+#include "laneDetector_utils.hpp"
+#include "lsd.h"
+#include <ransac.hpp>
+// #include "mlesac.hpp"
+#include <matrixTransformation.hpp>
+
+Parabola lanes, previous;
+
+vector<Point> cost_map_lanes;
+sensor_msgs::LaserScan scan_global;
+
+void callback(node::TutorialsConfig &config, uint32_t level);
+Mat findIntensityMaxima(Mat img);
+Mat findEdgeFeatures(Mat img, bool top_edges);
+Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature);
+Mat fit_ransac(Mat all_features);
+void publish_lanes(Mat lanes_by_ransac);
+vector<Point> detect_lanes(Mat img);
+void imageCb(const sensor_msgs::ImageConstPtr& msg);
+sensor_msgs::LaserScan imageConvert(Mat image);
+
+
+int flag=1;
+
+using namespace std;
+using namespace cv;
+using namespace ros;
+
+Mat transform = (Mat_<double>(3, 3) << -0.2845660084796459, -0.6990548252793777, 691.2703423570697, -0.03794262877137361, -2.020741261264247, 1473.107653024983, -3.138403683957707e-05, -0.001727021397398348, 1);
 
 void callback(node::TutorialsConfig &config, uint32_t level)
 {
@@ -18,8 +68,8 @@ void callback(node::TutorialsConfig &config, uint32_t level)
 	horizon = config.horizon;
 	horizon_offset = config.horizon_offset;
 
-	tranformedPoints0_lowerbound = config.tranformedPoints0_lowerbound;
-	tranformedPoints0_upperbound = config.tranformedPoints0_upperbound;
+	transformedPoints0_lowerbound = config.transformedPoints0_lowerbound;
+	transformedPoints0_upperbound = config.transformedPoints0_upperbound;
 	point1_y = config.point1_y;
 	point2_x = config.point2_x;
 
@@ -30,11 +80,14 @@ void callback(node::TutorialsConfig &config, uint32_t level)
 
 	// distance between first point of image and lidar
 	yshift = config.yshift;
+
+	hysterisThreshold_min = config.hysterisThreshold_min;
+	hysterisThreshold_max = config.hysterisThreshold_max;
 }
 
 Mat findIntensityMaxima(Mat img)
 {
-    Mat topview = topview(img);
+    Mat topview = top_view(img, ::transform);
 
     GaussianBlur(topview, topview, Size(5, 15), 0, 0);
     blur(topview, topview, Size(25,25));
@@ -129,10 +182,10 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
     // this will create lines using canny
     else
     {
-        Mat topview = top_view(img);
+        Mat topview = top_view(img, ::transform);
         Canny(topview, edges, 200, 300);
         HoughLinesP(edges, lines_top, 1, CV_PI/180, 60, 60, 50);
-        transformLines(lines_top, lines, transform.inv());
+        transformLines(lines_top, lines, ::transform.inv());
     }
 
     for( size_t i = 0; i < lines.size(); i++ )
@@ -142,9 +195,9 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
 
         inputPoints[0] = Point2f( l[0], l[1] );
         inputPoints[1] = Point2f( l[2], l[3] ); 
-        transformPoints(inputPoints, transformedPoints, transform, 2);
+        transformPoints(inputPoints, transformedPoints, ::transform, 2);
 
-        if(transformedPoints[0].x<tranformedPoints0_lowerbound || transformedPoints[0].x>tranformedPoints0_upperbound || transformedPoints[1].x<tranformedPoints0_lowerbound || transformedPoints[1].x>tranformedPoints0_upperbound || l[1] < point1_y || l[2] < point2_x)
+        if(transformedPoints[0].x<transformedPoints0_lowerbound || transformedPoints[0].x>transformedPoints0_upperbound || transformedPoints[1].x<transformedPoints0_lowerbound || transformedPoints[1].x>transformedPoints0_upperbound || l[1] < point1_y || l[2] < point2_x)
         {
             lines.erase(lines.begin() + i);
             i--;
@@ -169,7 +222,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
         if(is_lane[i]>10)
             lane_lines.push_back(lines[i]);
 
-    transformLines(lane_lines, lane_lines_top, transform);
+    transformLines(lane_lines, lane_lines_top, ::transform);
     Mat edgeFeatures;
     Mat filtered_lines = Mat(img.size(),CV_8UC1, Scalar(0));
     for( size_t i = 0; i < lane_lines.size(); i++ )
@@ -177,7 +230,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
         Vec4i l = lane_lines[i];
         line(filtered_lines, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(255), 5, CV_AA);
     }
-    edgeFeatures = top_view(filtered_lines);
+    edgeFeatures = top_view(filtered_lines, ::transform);
 
     if(is_debug==true)
     {
@@ -193,7 +246,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
     return edgeFeatures;
 }
 
-Mat find_all_features(Mat boundary, Mat intensityMaxima, edgeFeature)
+Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
 {
 	Mat all_features = Mat(1000, 800,CV_8UC1, Scalar(0));
 
@@ -244,79 +297,23 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, edgeFeature)
 
 Mat fit_ransac(Mat all_features)
 {
-	Mat all_features_frontview = front_view(all_features);
+	Mat all_features_frontview = front_view(all_features, ::transform);
    	
     Mat lanes_by_ransac = Mat(1920, 1200, CV_8UC3, Scalar(0,0,0));
     lanes = getRansacModel(all_features_frontview, previous);
     previous=lanes;
 
-    if(lanes.a1==0 && lanes.b1==0 && lanes.c1==0 && lanes.a2!=0 && lanes.b2!=0 && lanes.c2!=0)
-    {
-        for(int i=0;i<lanes_by_ransac.rows;i++)
-        {
-            for(int j=0;j<lanes_by_ransac.cols;j++)
-            {
-                if(fabs(lanes.a2*i*i+lanes.b2*i+lanes.c2-j)<3)
-                {
-                    lanes_by_ransac.at<Vec3b>(i,j)[0]=255;
-                    lanes_by_ransac.at<Vec3b>(i,j)[1]=255;
-                    lanes_by_ransac.at<Vec3b>(i,j)[2]=255;
-                }
-            }
-        }
-    }
-
-    else if(lanes.a1!=0 && lanes.b1!=0 && lanes.c1!=0 && lanes.a2==0 && lanes.b2==0 && lanes.c2==0)
-    {
-        for(int i=0;i<lanes_by_ransac.rows;i++)
-        {
-            for(int j=0;j<lanes_by_ransac.cols;j++)
-            {
-                if(fabs(lanes.a1*i*i+lanes.b1*i+lanes.c1-j)<3) 
-                    {
-                        lanes_by_ransac.at<Vec3b>(i,j)[0]=255;
-                        lanes_by_ransac.at<Vec3b>(i,j)[1]=255;
-                        lanes_by_ransac.at<Vec3b>(i,j)[2]=255;
-                    }
-            }
-        }
-    }
-    
-    else
-    {
-        for(int i=0;i<lanes_by_ransac.rows;i++)
-        {
-            for(int j=0;j<lanes_by_ransac.cols;j++)
-            {
-                if(fabs(lanes.a1*i*i+lanes.b1*i+lanes.c1-j)<3) 
-                    {
-                        lanes_by_ransac.at<Vec3b>(i,j)[0]=255;
-                        lanes_by_ransac.at<Vec3b>(i,j)[1]=255;
-                        lanes_by_ransac.at<Vec3b>(i,j)[2]=255;
-                    }
-            }
-        }
-        for(int i=0;i<lanes_by_ransac.rows;i++)
-        {
-            for(int j=0;j<lanes_by_ransac.cols;j++)
-            {
-                if(fabs(lanes.a2*i*i+lanes.b2*i+lanes.c2-j)<3)
-                {
-                    lanes_by_ransac.at<Vec3b>(i,j)[0]=255;
-                    lanes_by_ransac.at<Vec3b>(i,j)[1]=255;
-                    lanes_by_ransac.at<Vec3b>(i,j)[2]=255;
-                }
-            }
-        }
-    }
+    Mat fitLanes = drawLanes(all_features_frontview, lanes);
 
     namedWindow("lanes_by_ransac", WINDOW_NORMAL);
-    imshow("lanes_by_ransac", lanes_by_ransac);
+    imshow("lanes_by_ransac", fitLanes);
+
+    return fitLanes;
 }
 
 void publish_lanes(Mat lanes_by_ransac)
 {
-	Mat lanes_by_ransac_topview = topview(lanes_by_ransac);
+	Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform);
 
     scan_global = imageConvert(lanes_by_ransac_topview);
     
@@ -414,8 +411,6 @@ sensor_msgs::LaserScan imageConvert(Mat img)
 
 	return scan;
 }
-
-
 
 int main(int argc, char **argv)
 {
