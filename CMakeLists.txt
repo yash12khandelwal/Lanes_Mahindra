@@ -18,10 +18,17 @@ find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	std_msgs
 	rospy
+  dynamic_reconfigure
 )
+
+generate_dynamic_reconfigure_options(
+  cfg/Tutorials.cfg
+  #...
+)
+
 find_package(OpenCV REQUIRED)
 find_package(CUDA REQUIRED)
-## find_package(Armadillo REQUIRED)
+find_package(Armadillo REQUIRED)
 
 catkin_package()
 
@@ -30,20 +37,22 @@ include_directories(
 	${catkin_INCLUDE_DIRS}
   	${OpenCV_INCLUDE_DIRS}
   	${CUDA_INCLUDE_DIRS}
-  ###	${ARMADILLO_INCLUDE_DIRS}
+  	${ARMADILLO_INCLUDE_DIRS}
 )
 
 add_executable(lanes_ransac src/laneDetector_ransac.cpp)
-### add_executable(lanes src/laneDetector.cpp)
+add_executable(lanes src/laneDetector.cpp)
 
-###target_link_libraries(lanes 
-###  ${catkin_LIBRARIES}
-###  ${OpenCV_LIBRARIES}
-### #### ${ARMADILLO_LIBRARIES}
-###)
+target_link_libraries(lanes 
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+  ${ARMADILLO_LIBRARIES}
+)
 
 target_link_libraries(lanes_ransac 
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
- #### ${ARMADILLO_LIBRARIES}
+  ${ARMADILLO_LIBRARIES}
 )
+
+add_dependencies(lanes_ransac ${PROJECT_NAME}_gencfg)

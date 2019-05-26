@@ -1,11 +1,7 @@
 #ifndef RANSAC
 #define RANSAC
 
-
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <bits/stdc++.h>
+#include "include.hpp"
 
 using namespace std;
 using namespace cv;
@@ -22,16 +18,6 @@ typedef struct model
   float c2 = 0.0;
 }model;
 
-
-//set threshold for white color
-#define wTh 50
-//define no of iteration, max dist squre of pt from our estimated model
-#define iteration 100
-#define maxDist 5
-//define threshold distance to remove white pixel near lane1
-#define removeDist 100
-//define minimum number of points to be lie on a lane
-#define minLaneInlier 500
 
 //calculation of model parameters based on 3 randonmly selected points
 float get_a(Point p1, Point p2, Point p3)

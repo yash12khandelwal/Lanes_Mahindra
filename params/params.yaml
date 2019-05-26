@@ -36,7 +36,9 @@ horizon_offset: "200"
 
 # cameraParameters
 pixelPerMeter : "250"
-cameraClearance: "0"
+
+# distance between the first point on image and lidar
+yshift : "0.33"
 
 # in check lane change function some x has been used, check what is this
 
