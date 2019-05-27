@@ -37,10 +37,9 @@ Mat findEdgeFeatures(Mat img, bool top_edges);
 Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature);
 Mat fit_ransac(Mat all_features);
 void publish_lanes(Mat lanes_by_ransac);
-vector<Point> detect_lanes(Mat img);
+void detect_lanes(Mat img);
 void imageCb(const sensor_msgs::ImageConstPtr& msg);
 sensor_msgs::LaserScan imageConvert(Mat image);
-
 
 int flag=1;
 
@@ -49,6 +48,8 @@ using namespace cv;
 using namespace ros;
 
 Mat transform = (Mat_<double>(3, 3) << -0.2845660084796459, -0.6990548252793777, 691.2703423570697, -0.03794262877137361, -2.020741261264247, 1473.107653024983, -3.138403683957707e-05, -0.001727021397398348, 1);
+int size_X = 800;
+int size_Y = 1000;
 
 void callback(node::TutorialsConfig &config, uint32_t level)
 {
@@ -77,17 +78,27 @@ void callback(node::TutorialsConfig &config, uint32_t level)
 	h = config.h;
 	w = config.w;
 	variance = config.variance;
+	hysterisThreshold_min = config.hysterisThreshold_min;
+	hysterisThreshold_max = config.hysterisThreshold_max;
 
 	// distance between first point of image and lidar
 	yshift = config.yshift;
 
-	hysterisThreshold_min = config.hysterisThreshold_min;
-	hysterisThreshold_max = config.hysterisThreshold_max;
+	// region of interest in all_features
+	y = config.y;
+	lane_width = config.lane_width;
+	k1 = config.k1;
+	k2 = config.k2;
+
+	// blue channel image parameters
+	medianBlurkernel = config.medianBlurkernel;
+    neighbourhoodSize = config.neighbourhoodSize;
+    constantSubtracted = config.constantSubtracted;
 }
 
 Mat findIntensityMaxima(Mat img)
 {
-    Mat topview = top_view(img, ::transform);
+    Mat topview = top_view(img, ::transform, size_X, size_Y);
 
     GaussianBlur(topview, topview, Size(5, 15), 0, 0);
     blur(topview, topview, Size(25,25));
@@ -182,7 +193,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
     // this will create lines using canny
     else
     {
-        Mat topview = top_view(img, ::transform);
+        Mat topview = top_view(img, ::transform, size_X, size_Y);
         Canny(topview, edges, 200, 300);
         HoughLinesP(edges, lines_top, 1, CV_PI/180, 60, 60, 50);
         transformLines(lines_top, lines, ::transform.inv());
@@ -230,7 +241,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
         Vec4i l = lane_lines[i];
         line(filtered_lines, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(255), 5, CV_AA);
     }
-    edgeFeatures = top_view(filtered_lines, ::transform);
+    edgeFeatures = top_view(filtered_lines, ::transform, size_X, size_Y);
 
     if(is_debug==true)
     {
@@ -248,12 +259,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
 
 Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
 {
-	Mat all_features = Mat(1000, 800,CV_8UC1, Scalar(0));
-
-    int y = 400;
-    int w = 320;
-    int k1 = 20;
-    int k2 = 170;
+	Mat all_features = Mat(size_Y, size_X,CV_8UC1, Scalar(0));
 
     medianBlur(intensityMaxima,intensityMaxima, 5);
 
@@ -261,7 +267,7 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
     {
         for(int l = 0; l < 2; l++ )
         {
-            for(int offset = w/2 - k1; offset < w/2 + k2; offset++)
+            for(int offset = lane_width/2 - k1; offset < lane_width/2 + k2; offset++)
             {
                 if( l > 0 )
                     offset = -offset;
@@ -293,17 +299,19 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
 
     namedWindow("all_features", WINDOW_NORMAL);
     imshow("all_features", all_features);
+
+    return all_features;
 }
 
 Mat fit_ransac(Mat all_features)
 {
 	Mat all_features_frontview = front_view(all_features, ::transform);
-   	
-    Mat lanes_by_ransac = Mat(1920, 1200, CV_8UC3, Scalar(0,0,0));
+
     lanes = getRansacModel(all_features_frontview, previous);
     previous=lanes;
 
     Mat fitLanes = drawLanes(all_features_frontview, lanes);
+    // Mat originalLanes = drawLanes(all_features_frontview, lanes);
 
     namedWindow("lanes_by_ransac", WINDOW_NORMAL);
     imshow("lanes_by_ransac", fitLanes);
@@ -313,13 +321,30 @@ Mat fit_ransac(Mat all_features)
 
 void publish_lanes(Mat lanes_by_ransac)
 {
-	Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform);
+	Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform, size_X, size_Y);
 
-    scan_global = imageConvert(lanes_by_ransac_topview);
-    
+    scan_global = imageConvert(lanes_by_ransac_topview); 
 }
 
-vector<Point> detect_lanes(Mat img)
+Mat blueChannelProcessing(Mat img)
+{
+    Mat channels[3];
+    split(img, channels);
+    Mat b = channels[0];
+
+    GaussianBlur(b , b, Size( 9, 9), 0, 0);
+    adaptiveThreshold(b,b,255,ADAPTIVE_THRESH_MEAN_C,THRESH_BINARY,neighbourhoodSize, constantSubtracted);
+    medianBlur(b,b,medianBlurkernel);
+
+    if(is_debug){
+    	namedWindow("blue channel image", WINDOW_NORMAL);
+    	imshow("blue channel image", b);
+    }
+
+    return b;
+}
+
+void detect_lanes(Mat img)
 {
     if(is_debug==true)
     {
@@ -328,19 +353,22 @@ vector<Point> detect_lanes(Mat img)
     }
 
     // initialize boundary with a matrix of (800*400)
-    Mat boundary = Mat(1000, 800, CV_8UC1, Scalar(0));
+    Mat boundary = Mat(size_Y, size_X, CV_8UC1, Scalar(0));
 
     // intenity maximum image made
     Mat intensityMaxima = findIntensityMaxima(img);
-    
+
     // image with edge features made
     Mat edgeFeature = findEdgeFeatures(img, false);
 
+    // blue channel image
+    Mat b = blueChannelProcessing(img);
+
     // curve fit on the basis of orignal image, maxima intensity image and edgeFeature image
     Mat all_features = find_all_features(boundary, intensityMaxima, edgeFeature);
-    
+
     Mat lanes_by_ransac = fit_ransac(all_features);
-    
+
     publish_lanes(lanes_by_ransac);
 }
 
@@ -356,7 +384,6 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
     {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
         img = cv_ptr->image;
-        cout << img.rows << img.cols << endl;
     }
     catch (cv_bridge::Exception& e)
     {
@@ -442,7 +469,7 @@ int main(int argc, char **argv)
 
 
 		flag=0;
-		waitKey(30);
+		waitKey(500);
 		spinOnce();
 		r.sleep();
     }

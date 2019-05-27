@@ -3,10 +3,10 @@
 #include <opencv2/core/core.hpp>
 #include <iostream>
 
-Mat top_view(Mat img, Mat transform) {
+Mat top_view(Mat img, Mat transform, int size_X, int size_Y) {
 
 	Mat topview;
-    warpPerspective(img, topview, transform, Size(800,1000));
+    warpPerspective(img, topview, transform, Size(size_X,size_Y));
 
     return topview;
 }

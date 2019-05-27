@@ -11,7 +11,7 @@ int minPointsForRANSAC = 500;
 int grid_size = 3;
 int grid_white_thresh = 3;
 
-float pixelPerMeter = 41.9287;
+float pixelPerMeter = 134;
 
 int horizon = 500;
 int horizon_offset = 200;
@@ -26,10 +26,19 @@ int h = 30;
 int w = 10;
 float variance = 2.1;
 
-float yshift; // distance from first view point to lidar in metres
+float yshift = 0.60; // distance from first view point to lidar in metres
 
-float hysterisThreshold_min = 2.1;
-float hysterisThreshold_max = 4.2;
+float hysterisThreshold_min = 0.39;
+float hysterisThreshold_max = 0.45;
+
+int y = 400;
+int lane_width = 320;
+int k1 = 50;
+int k2 = 50;
+
+int medianBlurkernel = 3; //kernel size of medianBlur for cleaning intersectionImages
+int neighbourhoodSize = 25; //neighbourhood size or block size for adaptive thresholding
+int constantSubtracted = -30; //constant subtracted during adaptive thresholding
 
 #endif
 
