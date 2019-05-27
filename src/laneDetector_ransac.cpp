@@ -22,7 +22,9 @@
 #include "houghP.hpp"
 #include "laneDetector_utils.hpp"
 #include "lsd.h"
-#include <ransac.hpp>
+#include <ransac_new_2.hpp>
+
+// #include <ransac.hpp>
 // #include "mlesac.hpp"
 #include <matrixTransformation.hpp>
 
@@ -34,8 +36,8 @@ sensor_msgs::LaserScan scan_global;
 void callback(node::TutorialsConfig &config, uint32_t level);
 Mat findIntensityMaxima(Mat img);
 Mat findEdgeFeatures(Mat img, bool top_edges);
-Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature);
-Mat fit_ransac(Mat all_features);
+Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature, Mat b);
+Mat fit_ransac(Mat img, Mat all_features);
 void publish_lanes(Mat lanes_by_ransac);
 void detect_lanes(Mat img);
 void imageCb(const sensor_msgs::ImageConstPtr& msg);
@@ -257,7 +259,7 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
     return edgeFeatures;
 }
 
-Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
+Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature, Mat b)
 {
 	Mat all_features = Mat(size_Y, size_X,CV_8UC1, Scalar(0));
 
@@ -275,20 +277,20 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
                 int j = (int)(y+offset);
 
                 all_features.at<uchar>(i,j)=30;
-                if(intensityMaxima.at<uchar>(i, j)>8)
+                if(intensityMaxima.at<uchar>(i, j)>8 || edgeFeature.at<uchar>(i, j)>5 || b.at<uchar>(i,j)>5)
                 {
                     all_features.at<uchar>(i,j) = {255};
                 }
                 
-                if(edgeFeature.at<uchar>(i, j)>5)
-                {
-                    all_features.at<uchar>(i, j) = {255};
-                }
+                // if(edgeFeature.at<uchar>(i, j)>5)
+                // {
+                //     all_features.at<uchar>(i, j) = {255};
+                // }
                 
-                if(boundary.at<uchar>(i, j)>5)
-                {
-                    all_features.at<uchar>(i, j) = {255};
-                }
+                // if(boundary.at<uchar>(i, j)>5)
+                // {
+                //     all_features.at<uchar>(i, j) = {255};
+                // }
                 
                 if( l > 0 )
                     offset = -offset;
@@ -303,27 +305,31 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature)
     return all_features;
 }
 
-Mat fit_ransac(Mat all_features)
+Mat fit_ransac(Mat img, Mat all_features)
 {
-	Mat all_features_frontview = front_view(all_features, ::transform);
+	// Mat all_features_frontview = front_view(all_features, ::transform);
 
-    lanes = getRansacModel(all_features_frontview, previous);
+    lanes = getRansacModel(all_features, previous);
     previous=lanes;
 
-    Mat fitLanes = drawLanes(all_features_frontview, lanes);
-    // Mat originalLanes = drawLanes(all_features_frontview, lanes);
+    Mat fitLanes = drawLanes(all_features, lanes);
+    Mat originalLanes = drawLanes_white(top_view(img, ::transform, size_X, size_Y), lanes);
+    // originalLanes = front_view(originalLanes, ::transform);
 
     namedWindow("lanes_by_ransac", WINDOW_NORMAL);
     imshow("lanes_by_ransac", fitLanes);
+
+    namedWindow("Orignal_lanes_by_ransac", WINDOW_NORMAL);
+    imshow("Orignal_lanes_by_ransac", originalLanes);
 
     return fitLanes;
 }
 
 void publish_lanes(Mat lanes_by_ransac)
 {
-	Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform, size_X, size_Y);
+	// Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform, size_X, size_Y);
 
-    scan_global = imageConvert(lanes_by_ransac_topview); 
+    scan_global = imageConvert(lanes_by_ransac); 
 }
 
 Mat blueChannelProcessing(Mat img)
@@ -363,11 +369,15 @@ void detect_lanes(Mat img)
 
     // blue channel image
     Mat b = blueChannelProcessing(img);
+    Mat b_topview = top_view(b, ::transform, size_X, size_Y);
 
     // curve fit on the basis of orignal image, maxima intensity image and edgeFeature image
-    Mat all_features = find_all_features(boundary, intensityMaxima, edgeFeature);
+    Mat all_features = find_all_features(boundary, intensityMaxima, edgeFeature, b_topview);
 
-    Mat lanes_by_ransac = fit_ransac(all_features);
+    // Mat all_features_frontview = front_view(all_features);
+
+    Mat lanes_by_ransac = fit_ransac(img, all_features);
+    // Mat lanes_by_ransac = fit_ransac(all_features_frontview);
 
     publish_lanes(lanes_by_ransac);
 }
@@ -404,12 +414,14 @@ sensor_msgs::LaserScan imageConvert(Mat img)
 	scan.angle_min = -CV_PI/2;
 	scan.angle_max = CV_PI/2;
 	scan.angle_increment = CV_PI/bins;
+    scan.header.stamp = ros::Time::now();
+    
 	double inf = std::numeric_limits<double>::infinity();
 	scan.range_max = inf; 
 	
 	scan.header.frame_id = "laser";
 
-	cvtColor(img,img,CV_BGR2GRAY);    
+	// cvtColor(img,img,CV_BGR2GRAY);    
 
 	for (int i=0;i<bins;i++)
 	{
