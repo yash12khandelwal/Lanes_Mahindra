@@ -15,14 +15,13 @@
 #include <dynamic_reconfigure/server.h>
 #include <lanes/TutorialsConfig.h>
 
-
 #include <params.hpp>
 #include "lsd.cpp"
 #include "laneDetector_utils.cpp"
 #include "houghP.hpp"
 #include "laneDetector_utils.hpp"
 #include "lsd.h"
-#include <ransac_new_2.hpp>
+#include <ransac_new_2_yash.hpp>
 
 // #include <ransac.hpp>
 // #include "mlesac.hpp"
@@ -36,7 +35,7 @@ sensor_msgs::LaserScan scan_global;
 void callback(node::TutorialsConfig &config, uint32_t level);
 Mat findIntensityMaxima(Mat img);
 Mat findEdgeFeatures(Mat img, bool top_edges);
-Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature, Mat b);
+Mat find_all_features(Mat edgeFeature, Mat b);
 Mat fit_ransac(Mat img, Mat all_features);
 void publish_lanes(Mat lanes_by_ransac);
 void detect_lanes(Mat img);
@@ -57,17 +56,18 @@ void callback(node::TutorialsConfig &config, uint32_t level)
 {
     is_debug = config.is_debug;
 
-    // ransac parameters
+        // ransac parameters
 	iteration = config.iteration;
 	maxDist = config.maxDist;
 	minLaneInlier = config.minLaneInlier;
 	minPointsForRANSAC = config.minPointsForRANSAC;
-	grid_size = config.grid_size;
+	// grid_size = config.grid_size;
 
-	// publish parameters
+        // publish parameters
 	pixelPerMeter = config.pixelPerMeter;
 
-    // edgeFeatures parameters
+
+        // edgeFeatures parameters
 	horizon = config.horizon;
 	horizon_offset = config.horizon_offset;
 
@@ -77,77 +77,83 @@ void callback(node::TutorialsConfig &config, uint32_t level)
 	point2_x = config.point2_x;
 
 	// intensity maxima parameters
-	h = config.h;
-	w = config.w;
-	variance = config.variance;
-	hysterisThreshold_min = config.hysterisThreshold_min;
-	hysterisThreshold_max = config.hysterisThreshold_max;
+	// h = config.h;
+	// w = config.w;
+	// variance = config.variance;
+	// hysterisThreshold_min = config.hysterisThreshold_min;
+	// hysterisThreshold_max = config.hysterisThreshold_max;
 
 	// distance between first point of image and lidar
 	yshift = config.yshift;
 
 	// region of interest in all_features
-	y = config.y;
-	lane_width = config.lane_width;
-	k1 = config.k1;
-	k2 = config.k2;
+	// y = config.y;
+	// lane_width = config.lane_width;
+	// k1 = config.k1;
+	// k2 = config.k2;
 
 	// blue channel image parameters
 	medianBlurkernel = config.medianBlurkernel;
     neighbourhoodSize = config.neighbourhoodSize;
+
     constantSubtracted = config.constantSubtracted;
+
+    region = config.region;
+
+    baseDistance1 = config.baseDistance1;
+    centroidDistance = config.centroidDistance;
 }
 
-Mat findIntensityMaxima(Mat img)
-{
-    Mat topview = top_view(img, ::transform, size_X, size_Y);
+// Mat findIntensityMaxima(Mat img)
+// {
+//     Mat topview = top_view(img, ::transform, size_X, size_Y);
 
-    GaussianBlur(topview, topview, Size(5, 15), 0, 0);
-    blur(topview, topview, Size(25,25));
+//     GaussianBlur(topview, topview, Size(5, 15), 0, 0);
+//     blur(topview, topview, Size(25,25));
 
-    if(is_debug == true){
-    	namedWindow("topview", WINDOW_NORMAL);
-    	imshow("topview", topview);
-    }
+//     if(is_debug == true){
+//     	namedWindow("topview", WINDOW_NORMAL);
+//     	imshow("topview", topview);
+//     }
 
-    cvtColor(topview, topview, CV_BGR2GRAY);
-    medianBlur(topview, topview, 3);
+//     cvtColor(topview, topview, CV_BGR2GRAY);
+//     medianBlur(topview, topview, 3);
 
-    // template matching
-    Mat t0, t1, t2, t3, t4, t5, t6;
-    matchTemplate(topview, getTemplateX2(2.1, h, w, -10), t0, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,   0), t1, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,  10), t2, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,  -20), t3, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,  +20), t4, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,  +30), t5, CV_TM_CCOEFF_NORMED);
-    matchTemplate(topview, getTemplateX2(2.1, h, w,  -30), t6, CV_TM_CCOEFF_NORMED);
+//     // template matching
+//     Mat t0, t1, t2, t3, t4, t5, t6;
+//     matchTemplate(topview, getTemplateX2(2.1, h, w, -10), t0, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,   0), t1, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,  10), t2, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,  -20), t3, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,  +20), t4, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,  +30), t5, CV_TM_CCOEFF_NORMED);
+//     matchTemplate(topview, getTemplateX2(2.1, h, w,  -30), t6, CV_TM_CCOEFF_NORMED);
 
-    Mat t = t0-t0;
-    for(int i=0;i<t.rows;i++)
-        for(int j=0;j<t.cols;j++)
-        {
-            t.at<float>(i, j) = max( t4.at<float>(i, j), max(t3.at<float>(i, j), max(t0.at<float>(i, j), max(t1.at<float>(i, j), t2.at<float>(i, j)))));
-            t.at<float>(i, j) = max( t.at<float>(i, j), max(t5.at<float>(i, j), t6.at<float>(i, j)) );
-        }
+//     Mat t = t0-t0;
+//     for(int i=0;i<t.rows;i++)
+//         for(int j=0;j<t.cols;j++)
+//         {
+//             t.at<float>(i, j) = max( t4.at<float>(i, j), max(t3.at<float>(i, j), max(t0.at<float>(i, j), max(t1.at<float>(i, j), t2.at<float>(i, j)))));
+//             t.at<float>(i, j) = max( t.at<float>(i, j), max(t5.at<float>(i, j), t6.at<float>(i, j)) );
+//         }
 
-    // ########threshold###########
-    hysterisThreshold(t, topview, hysterisThreshold_min, hysterisThreshold_max);
+//     // ########threshold###########
+//     hysterisThreshold(t, topview, hysterisThreshold_min, hysterisThreshold_max);
 
-    Mat result=Mat(topview.rows+h-1, topview.cols+w-1,CV_8UC1, Scalar(0));
-    for(int i=0;i<topview.rows;i++)
-        for(int j=0;j<topview.cols;j++)
-            result.at<uchar>(i+(h-1)/2,j+(w-1)/2)=255*topview.at<float>(i,j);
+//     Mat result=Mat(topview.rows+h-1, topview.cols+w-1,CV_8UC1, Scalar(0));
+//     for(int i=0;i<topview.rows;i++)
+//         for(int j=0;j<topview.cols;j++)
+//             result.at<uchar>(i+(h-1)/2,j+(w-1)/2)=255*topview.at<float>(i,j);
 
 
-    if(is_debug==true)
-    {
-        namedWindow("intensityMaxima", WINDOW_NORMAL);
-        imshow("intensityMaxima", result);
-    }
+//     if(is_debug==true)
+//     {
+//         namedWindow("intensityMaxima", WINDOW_NORMAL);
+//         imshow("intensityMaxima", result);
+//     }
 
-    return result;
-}
+//     return result;
+// }
 
 Mat findEdgeFeatures(Mat img, bool top_edges)
 {
@@ -259,45 +265,11 @@ Mat findEdgeFeatures(Mat img, bool top_edges)
     return edgeFeatures;
 }
 
-Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature, Mat b)
+Mat find_all_features(Mat edgeFeature, Mat b)
 {
 	Mat all_features = Mat(size_Y, size_X,CV_8UC1, Scalar(0));
 
-    medianBlur(intensityMaxima,intensityMaxima, 5);
-
-    for(int i=0; i<edgeFeature.rows; i++)
-    {
-        for(int l = 0; l < 2; l++ )
-        {
-            for(int offset = lane_width/2 - k1; offset < lane_width/2 + k2; offset++)
-            {
-                if( l > 0 )
-                    offset = -offset;
-                
-                int j = (int)(y+offset);
-
-                all_features.at<uchar>(i,j)=30;
-                if(intensityMaxima.at<uchar>(i, j)>8 || edgeFeature.at<uchar>(i, j)>5 || b.at<uchar>(i,j)>5)
-                {
-                    all_features.at<uchar>(i,j) = {255};
-                }
-                
-                // if(edgeFeature.at<uchar>(i, j)>5)
-                // {
-                //     all_features.at<uchar>(i, j) = {255};
-                // }
-                
-                // if(boundary.at<uchar>(i, j)>5)
-                // {
-                //     all_features.at<uchar>(i, j) = {255};
-                // }
-                
-                if( l > 0 )
-                    offset = -offset;
-
-            }
-        }
-    }
+    bitwise_and(edgeFeature, b, all_features);
 
     namedWindow("all_features", WINDOW_NORMAL);
     imshow("all_features", all_features);
@@ -305,14 +277,16 @@ Mat find_all_features(Mat boundary, Mat intensityMaxima, Mat edgeFeature, Mat b)
     return all_features;
 }
 
-Mat fit_ransac(Mat img, Mat all_features)
+Mat fit_ransac(Mat img, Mat all_features_frontview)
 {
 	// Mat all_features_frontview = front_view(all_features, ::transform);
 
-    lanes = getRansacModel(all_features, previous);
+    Mat fitRansac = Mat(size_Y, size_X,CV_8UC1, Scalar(0));
+
+    lanes = getRansacModel(all_features_frontview, previous);
     previous=lanes;
 
-    Mat fitLanes = drawLanes(all_features, lanes);
+    Mat fitLanes = drawLanes(fitRansac, lanes);
     Mat originalLanes = drawLanes_white(top_view(img, ::transform, size_X, size_Y), lanes);
     // originalLanes = front_view(originalLanes, ::transform);
 
@@ -327,8 +301,6 @@ Mat fit_ransac(Mat img, Mat all_features)
 
 void publish_lanes(Mat lanes_by_ransac)
 {
-	// Mat lanes_by_ransac_topview = top_view(lanes_by_ransac, ::transform, size_X, size_Y);
-
     scan_global = imageConvert(lanes_by_ransac); 
 }
 
@@ -350,6 +322,20 @@ Mat blueChannelProcessing(Mat img)
     return b;
 }
 
+Mat roi(Mat all_features)
+{
+    for(int i = 0; i < all_features.rows; i++)
+    {
+        for(int j = 0; j < all_features.cols; j++)
+        {
+            if(j > region)
+                all_features.at<uchar>(i,j) = 0;
+        }
+    }
+
+    return all_features;
+}
+
 void detect_lanes(Mat img)
 {
     if(is_debug==true)
@@ -362,7 +348,7 @@ void detect_lanes(Mat img)
     Mat boundary = Mat(size_Y, size_X, CV_8UC1, Scalar(0));
 
     // intenity maximum image made
-    Mat intensityMaxima = findIntensityMaxima(img);
+    // Mat intensityMaxima = findIntensityMaxima(img);
 
     // image with edge features made
     Mat edgeFeature = findEdgeFeatures(img, false);
@@ -371,10 +357,23 @@ void detect_lanes(Mat img)
     Mat b = blueChannelProcessing(img);
     Mat b_topview = top_view(b, ::transform, size_X, size_Y);
 
-    // curve fit on the basis of orignal image, maxima intensity image and edgeFeature image
-    Mat all_features = find_all_features(boundary, intensityMaxima, edgeFeature, b_topview);
+    if(is_debug) {
+        namedWindow("b_topview", WINDOW_NORMAL);
+        imshow("b_topview", b_topview);
+    }
 
-    // Mat all_features_frontview = front_view(all_features);
+    // return all features in top view
+    Mat all_features = find_all_features(edgeFeature, b_topview);
+
+    all_features = roi(all_features);
+
+    // Mat all_features_frontview = front_view(all_features, ::transform);
+
+    namedWindow("all_features", WINDOW_NORMAL);
+    imshow("all_features", all_features);
+
+    // namedWindow("all_features_frontview", WINDOW_NORMAL);
+    // imshow("all_features_frontview", all_features_frontview);
 
     Mat lanes_by_ransac = fit_ransac(img, all_features);
     // Mat lanes_by_ransac = fit_ransac(all_features_frontview);
@@ -405,50 +404,55 @@ void imageCb(const sensor_msgs::ImageConstPtr& msg)
     detect_lanes(img);
 }
 
-sensor_msgs::LaserScan imageConvert(Mat img)
+sensor_msgs::LaserScan imageConvert(Mat img)    /// Input binary image for conversion to laserscan
 {
     int bins = 1080;
     int row = img.rows;
-	int col = img.cols;
-	sensor_msgs::LaserScan scan;
-	scan.angle_min = -CV_PI/2;
-	scan.angle_max = CV_PI/2;
-	scan.angle_increment = CV_PI/bins;
+    int col = img.cols;
+    sensor_msgs::LaserScan scan;
+    scan.angle_min = -CV_PI/2;
+    scan.angle_max = CV_PI/2;
+    scan.angle_increment = CV_PI/bins;
+    double inf = std::numeric_limits<double>::infinity();
+    scan.range_max = inf; 
+
+    scan.header.frame_id = "laser";
     scan.header.stamp = ros::Time::now();
-    
-	double inf = std::numeric_limits<double>::infinity();
-	scan.range_max = inf; 
-	
-	scan.header.frame_id = "laser";
+    scan.scan_time = 0.025;
+    scan.time_increment = (float)(scan.scan_time)/bins;
 
-	// cvtColor(img,img,CV_BGR2GRAY);    
+    namedWindow("check", WINDOW_NORMAL);
+    imshow("check", img);
 
-	for (int i=0;i<bins;i++)
-	{
-		scan.ranges.push_back(scan.range_max);
-	}
+    for (int i=0;i<bins;i++)
+    {
+        scan.ranges.push_back(scan.range_max);
+    }
 
-	scan.range_max = 80;
-	for(int i = 0; i < row; ++i)
-	{
-		for(int j = 0; j < col; ++j)
-		{
-			if(img.at<uchar>(i, j) > 0)
-			{
-				float a = (col/2 - j)/pixelPerMeter;
-				float b = (row - i)/pixelPerMeter + yshift;
+    scan.range_max = 80;
+    for(int i = 0; i < row; ++i)
+    {
+        for(int j = 0; j < col; ++j)
+        {
+            if(img.at<uchar>(i,j)>0)
+            {
+                float a = (j - col/2)/pixelPerMeter;
+                float b = (row - i)/pixelPerMeter + yshift;
 
-				double angle = atan(a/b);
+                double angle = atan(a/b);
 
-				double r = sqrt(a*a  + b*b);
+                double r = sqrt(a*a  + b*b);
 
-				int k = (angle - scan.angle_min)/(scan.angle_increment);
-				scan.ranges[bins-k-1] = r ;
-			}
-		}
-	}
+                int k = (angle - scan.angle_min)/(scan.angle_increment);
+                if (r < scan.ranges[bins-k-1]) {
+                    scan.ranges[bins-k-1] = r ;
+                }
 
-	return scan;
+            }
+        }
+    }
+
+    return scan;    /// returns Laserscan data
 }
 
 int main(int argc, char **argv)

@@ -14,9 +14,6 @@
 using namespace std;
 using namespace cv;
 
-int wTh=108;
-int stepsize = 225;
-bool return_prev_params=0;
 //structure to define the Parabola parameters
 typedef struct Parabola
 {
@@ -24,21 +21,8 @@ typedef struct Parabola
     float a1 = 0.0;
     float c1 = 0.0;
     float a2 = 0.0;
-    // float b2 = 0.0;
     float c2 = 0.0;
 } Parabola;
-
-vector<Parabola> v;
-// Parabola operator+(const Parabola &x)
-// {
-//     Parabola ans;
-//     ans.numModel = numModel+x.numModel;
-//     ans.a1= a1- x.a1;
-//     ans.c1= c1- x.c1;
-//     ans.a2= a2- x.a2;
-//     ans.c2= c2- x.c2;
-
-// }
 
 Point centroid(float a,float c,Mat img);
 
@@ -51,15 +35,12 @@ Parabola swap(Parabola param) {
 
     float temp1, temp3;
     temp1=param.a1;
-    // temp2=param.b1;
     temp3=param.c1;
 
     param.a1=param.a2;
-    // param.b1=param.b2;
     param.c1=param.c2;
 
     param.a2=temp1;
-    // param.b2=temp2;
     param.c2=temp3;
 
     return param;
@@ -219,111 +200,18 @@ bool isIntersectingLanes_2(Mat img, Parabola param){
     float c2 = param.c2;
     int x1,x2,y;
 
-    for(int i=0; i<img.rows-stepsize; i++){
-        y = img.rows - i;
-        x1 = ((y*y)/a1) + c1;
-        x2 = ((y*y)/a2) + c2;
-        if(fabs(x1 - x2) < 5)
-        {
-            //cout << fabs(x1-x2);
+    for(int i=0; i<img.rows; i++){
+         y = img.rows - i;
+         x1 = ((y*y)/a1) + c1;
+         x2 = ((y*y)/a2) + c2;
+         if((x1 - x2) < 15)
             return true;
-        }
     }
     return false;
 }
 
-Parabola no_sudden_change(Parabola bestTempParam, Mat img, Parabola previous)
-{
-    if(bestTempParam.numModel==2 && previous.numModel == 2)
-    {
-        bestTempParam = classify_lanes(img, bestTempParam, previous);
-        if(fabs(bestTempParam.a1 - previous.a1) > 100 || fabs(bestTempParam.c1 - previous.c1) > 100)
-        {
-            bestTempParam.a1 = 0;
-            bestTempParam.c1 = 0;
-            bestTempParam.numModel--;
-        }
-        if(fabs(bestTempParam.a2 - previous.a2) > 100 || fabs(bestTempParam.c2 - previous.c2) > 100)
-        {
-            bestTempParam.a2 = 0;
-            bestTempParam.c2 = 0;
-            bestTempParam.numModel--;
-        }
-    }
-
-    else if(bestTempParam.numModel == 2 && previous.numModel == 1)
-    {
-        bestTempParam = classify_lanes(img, bestTempParam, previous);
-        if((previous.a1 ==0 && previous.c1==0))
-        {
-            if(fabs(bestTempParam.a2 - previous.a2) > 100 || fabs(bestTempParam.c2 - previous.c2) > 100)
-            {
-                bestTempParam.a2 = 0;
-                bestTempParam.c2 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-        else
-        {
-            if(fabs(bestTempParam.a1 - previous.a1) > 100 || fabs(bestTempParam.c1 - previous.c1) > 100)
-            {
-                bestTempParam.a1 = 0;
-                bestTempParam.c1 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-    }
-
-    else if(bestTempParam.numModel == 1 && previous.numModel == 2)
-    {
-        bestTempParam = classify_lanes(img, bestTempParam, previous);
-        if(bestTempParam.a1 == 0 && bestTempParam.c1 == 0)
-        {
-            if(fabs(bestTempParam.a2 - previous.a2) > 100 || fabs(bestTempParam.c2 - previous.c2) > 100)
-            {
-                bestTempParam.a2 = 0;
-                bestTempParam.c2 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-        else
-        {
-            if(fabs(bestTempParam.a1 - previous.a1) > 100 || fabs(bestTempParam.c1 - previous.c1) > 100)
-            {
-                bestTempParam.a1 = 0;
-                bestTempParam.c1 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-    }
-
-    else if(bestTempParam.numModel == 1 && previous.numModel == 1)
-    {
-        bestTempParam = classify_lanes(img, bestTempParam, previous);
-        if((bestTempParam.a1 == 0 && bestTempParam.c1 == 0) && (previous.a1 == 0 && previous.c1 == 0))
-        {
-            if(fabs(bestTempParam.a2 - previous.a2) > 100 || fabs(bestTempParam.c2 - previous.c2) > 100)
-            {
-                bestTempParam.a2 = 0;
-                bestTempParam.c2 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-        else if((bestTempParam.a2 == 0 && bestTempParam.c2 == 0) && (previous.a2 == 0 && previous.c2 == 0))
-        {
-            if(fabs(bestTempParam.a1 - previous.a1) > 100 || fabs(bestTempParam.c1 - previous.c1) > 100)
-            {
-                bestTempParam.a1 = 0;
-                bestTempParam.c1 = 0;
-                bestTempParam.numModel--;
-            }
-        }
-    }
-    return bestTempParam;
-}
-
 //choose Parabola parameters of best fit curve basis on randomly selected 3 points
-Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previous)
+Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
 {
     int numDataPts = ptArray.size();
    
@@ -332,11 +220,8 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
     //initialising no. of lanes
     bestTempParam.numModel=2;
  
-
     int score_gl = 0;
     int score_l_gl = 0, score_r_gl = 0;
-
-    //check for no lane case here
 
     // loop of iterations
     for(int i = 0; i < iteration; i++)
@@ -358,6 +243,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
         int flag = 0;
         Point temp;
 
+        // sorting values on the basis of increasing x
         for(int m = 0; m < 3; m++)
         {  
             for(int n = 0; n < 3 - m; n++)
@@ -371,8 +257,8 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             }  
         }
 
-
-        if(ran_points[0].x == ran_points[1].x || ran_points[2].x==ran_points[3].x || ran_points[0].y == ran_points[1].y || ran_points[2].y==ran_points[3].y){
+        // removed a condition
+        if(ran_points[0].x == ran_points[1].x || ran_points[2].x == ran_points[3].x || ran_points[0].y == ran_points[1].y || ran_points[2].y==ran_points[3].y){
             i--;
             continue;
         }
@@ -381,6 +267,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
         tempParam.numModel = 2;
         tempParam.a1 = get_a(ran_points[0], ran_points[1]);
         tempParam.c1 = get_c(ran_points[0], ran_points[1]);
+
         if(true){
             tempParam.a2 = get_a(ran_points[2], ran_points[3]);
             tempParam.c2 = get_c(ran_points[2], ran_points[3]);
@@ -429,8 +316,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
         } //end of loop over image
 
 
-        if (dist(centroid(tempParam.a1,tempParam.c1,img),centroid(tempParam.a2,tempParam.c2,img)) < 20.0){
-            //cout<<"centroid issue."<<endl;
+        // if centroid of lanes are closer than 20 than then drop the lane with less no of points
+        if (dist(centroid(tempParam.a1,tempParam.c1,img),centroid(tempParam.a2,tempParam.c2,img)) < centroidDistance){
+            cout<<"centroid issue."<<endl;
             if(score_r_loc > score_l_loc)
             {
                 tempParam.a1 = 0;
@@ -447,29 +335,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             }
         }
 
-        else if(fabs(tempParam.c1 - tempParam.c2) < 40.0){
-            //cout<<"c1-c2 issue. "<<fabs(tempParam.c1 - tempParam.c2)<<endl;
-            if(score_r_loc > score_l_loc)
-            {
-                tempParam.a1 = 0;
-                tempParam.c1 = 0;
-                score_l_loc = 0;
-                tempParam.numModel--;
-            }
-
-            else
-            {
-                tempParam.a2 = 0;
-                tempParam.c2 = 0;
-                score_r_loc = 0;
-                tempParam.numModel--;
-            }
-        }
-
-        // intersection in image taken
-        
-        else if( isIntersectingLanes_2(img, tempParam)) {
-            //cout<<" isIntersectingLanes issue."<<endl;
+        // if c2 - c1 is less than 40 drop one lane with less no of inliers
+        else if(fabs(tempParam.c1 - tempParam.c2) < baseDistance1){
+            cout<<"c1-c2 issue."<<endl;
             if(score_r_loc > score_l_loc)
             {
                 tempParam.a1 = 0;
@@ -486,9 +354,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             }
         }
 
-
+        // if common points are too much then drop the lane with less no of inliers
         else if ((score_common/(score_common + score_l_loc + score_r_loc+1))*100 > common_inliers_thresh) {
-            //cout<<"common points issue."<<endl;
+            cout<<"common points issue."<<endl;
             if(score_r_loc > score_l_loc)
             {
                 tempParam.a1 = 0;
@@ -505,46 +373,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             }
         }
 
-        // else if(fabs(tempParam.a1 - tempParam.a2) < 200)
-        // {
-        //     //cout<<"a1 - a2 issue."<<endl;
-        //     if(score_r_loc > score_l_loc)
-        //     {
-        //         tempParam.a1 = 0;
-        //         tempParam.c1 = 0;
-        //         score_l_loc = 0;
-        //         tempParam.numModel--;
-        //     }
-        //     else
-        //     {
-        //         tempParam.a2 = 0;
-        //         tempParam.c2 = 0;
-        //         score_r_loc = 0;
-        //         tempParam.numModel--;
-        //     }
-        // }
 
-
-        if(fabs(tempParam.a1) <120 && fabs(tempParam.c1) > 150 && score_l_loc!=0)
-        {
-            //cout<<"horizontal issue."<<endl;
-            tempParam.a1 = 0;
-            tempParam.c1 = 0;
-            score_l_loc = 0;
-            tempParam.numModel--;
-        }
-
-        if(fabs(tempParam.a2) <120 && fabs(tempParam.c2) > 150 && score_r_loc!=0)
-        {
-            //cout<<"horizontal issue."<<endl;
-            tempParam.a2 = 0;
-            tempParam.c2 = 0;
-            score_r_loc = 0;
-            tempParam.numModel--;
-        }
-
-
-
+        // updating the best params for two lane case
+        // condition is that the sum of left and right inliers should be greater than 2 times the global inliers
         if (tempParam.numModel==2 && (score_l_loc + score_r_loc ) > 2*score_gl) {
 
             score_l_gl=score_l_loc;
@@ -558,6 +389,8 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             bestTempParam.numModel = tempParam.numModel;
         }
 
+        // updating the best params for one lane case
+        // condition in the sum of left and right inliers should be greater than global inliers
         if (tempParam.numModel==1 && (score_l_loc + score_r_loc) > score_gl) {
 
             score_l_gl=score_l_loc;
@@ -571,6 +404,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
             bestTempParam.numModel = tempParam.numModel;
         }
     } //end of iteration loop
+
     cout  <<"score_l_gl : "<<score_l_gl<<" score_r_gl : "<<score_r_gl<<endl;
 
     if(score_l_gl!=0 && (score_l_gl) < minLaneInlier){
@@ -585,11 +419,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img, Parabola previou
         bestTempParam.c2=0;
         bestTempParam.numModel--;
     }
-    bestTempParam = no_sudden_change(bestTempParam, img, previous);
-    
     cout<<"bestTempParam.numModel : "<<bestTempParam.numModel<<endl;
-    cout<<"bestTempParam.a1 : "<<bestTempParam.a1<<" bestTempParam.c1 : "<<bestTempParam.c1<<endl;
-    cout<<"bestTempParam.a2 : "<<bestTempParam.a2<<" bestTempParam.c2 : "<<bestTempParam.c2<<endl;
+    cout<<"bestTempParam.a1 : "<<bestTempParam.a1<<" bestTempParam.c1 : "<<endl;
+    cout<<" bestTempParam.a2 : "<<bestTempParam.a2<<" bestTempParam.c2 : "<<bestTempParam.c2<<endl;
 
     return bestTempParam;
 }
@@ -623,106 +455,39 @@ Point centroid(float a,float c,Mat img)
 
 Parabola getRansacModel(Mat img,Parabola previous)
 {
-    //apply ransac for first time it will converge for one lane
     vector<Point> ptArray1;
 
-    cout<<"NEW RANSAC\n";
-   
-    // if (grid_white_thresh >= grid_size*grid_size) {
-    //     grid_white_thresh = grid_size*grid_size -1;
-    // }
-
-    Mat plot_grid(img.rows,img.cols,CV_8UC1,Scalar(0));
-
-
-    int count = 0;
-    for(int i=((grid_size-1)/2);i<img.rows-(grid_size-1)/2;i+=grid_size)
+    for(int i = 0; i < img.rows; i++)
     {
-        for(int j=((grid_size-1)/2);j<img.cols-(grid_size-1)/2;j+=grid_size)
+        for(int j = 0; j < img.cols; j++)
         {
-            count=0;
-            for(int x=(j-(grid_size-1)/2);x<=(j+(grid_size-1)/2);x++)
-            {
-
-                for(int y=(i-(grid_size-1)/2);y<=(i+(grid_size-1)/2);y++)
-                {
-                    if(img.at<uchar>(y,x)>wTh){
-
-                        count++;
-                        // plot_grid.at<uchar>(i,j)=255;
-                    }
-                }
-            }
-
-            if(count>grid_white_thresh) {
-                ptArray1.push_back(Point(j , img.rows - i));
-                plot_grid.at<uchar>(i, j) = 255;
- 
-            }
+            if(img.at<uchar>(i,j)>128)
+                ptArray1.push_back(Point(j, img.rows - i));
         }
     }
-
-
-    namedWindow("grid",WINDOW_NORMAL);
-    
-    imshow("grid",plot_grid);
-
-
 
     //declare a Parabola vaiable to store the Parabola
     Parabola param;
     //get parameters of first Parabola form ransac function
 
-    if(ptArray1.size() > minPointsForRANSAC )
+    if(ptArray1.size() > minPointsForRANSAC)
     {
-        return_prev_params = 1;
-        param = ransac(ptArray1, param, img, previous);
+        param = ransac(ptArray1, param, img);
 
     }
 
     else {
         return previous;
     }
+
     //Lane classification based on previous frames
-    //if two lanes
-
     param=classify_lanes(img,param,previous);
-
-    // if(v.size() < 6)
-    // {
-    //     v.push_back(param);
-    // }
-    // else
-    // {
-    //     vector<Parabola>::iterator it; 
-    //     it = v.begin(); 
-    //     v.erase(it); 
-    // }
-    // Parabola final;
-    // float div=0;
-    // for(int i=0; i<v.size(); i++) 
-    // {
-    //     final.a1+= v[i].a1/(pow(2,i));
-    //     final.c1+= v[i].c1/(pow(2,i));
-    //     final.a2+= v[i].a2/(pow(2,i));
-    //     final.c2+= v[i].c2/(pow(2,i));
-    //     div+= (1/pow(2,i));
-    // }
-    // final.a1=final.a1/div;
-    // final.a2=final.a2/div;
-    // final.c1=final.c1/div;
-    // final.c2=final.c2/div;
-    // final.numModel= final.numModel/div;
-
-    // if(final.numModel >= 1.5) final.numModel = 2;
-    // else final.numModel = 1;
 
     return param;
 }
 
 Mat drawLanes(Mat fitLanes, Parabola lanes) {
 
-    Mat output=fitLanes.clone();
 
     vector<Point2f> left_lane, right_lane;
     float a1 = lanes.a1, a2 = lanes.a2, c1 = lanes.c1, c2 = lanes.c2;
@@ -746,13 +511,13 @@ Mat drawLanes(Mat fitLanes, Parabola lanes) {
 
     Mat left_curve(left_lane, true);
     left_curve.convertTo(left_curve, CV_32S); //adapt type for polylines
-    polylines(output, left_curve, false, Scalar(255, 0, 0), 3, CV_AA);
+    polylines(fitLanes, left_curve, false, Scalar(255, 255, 255), 3, CV_AA);
 
     Mat right_curve(right_lane, true);
     right_curve.convertTo(right_curve, CV_32S); //adapt type for polylines
-    polylines(output, right_curve, false, Scalar(0, 0, 255), 3, CV_AA);
+    polylines(fitLanes, right_curve, false, Scalar(255, 255, 255), 3, CV_AA);
 
-    return output;
+    return fitLanes;
 }
 
 Mat drawLanes_white(Mat img, Parabola lanes) {
@@ -779,11 +544,11 @@ Mat drawLanes_white(Mat img, Parabola lanes) {
 
     Mat left_curve(left_lane, true);
     left_curve.convertTo(left_curve, CV_32S); //adapt type for polylines
-    polylines(img, left_curve, false, Scalar(255), 3, CV_AA);
+    polylines(img, left_curve, false, Scalar(255, 0, 0), 3, CV_AA);
 
     Mat right_curve(right_lane, true);
     right_curve.convertTo(right_curve, CV_32S); //adapt type for polylines
-    polylines(img, right_curve, false, Scalar(255), 3, CV_AA);
+    polylines(img, right_curve, false, Scalar(0, 0, 255), 3, CV_AA);
 
     return img;
 }

@@ -28,6 +28,7 @@ typedef struct Parabola
     float a1 = 0.0;
     float c1 = 0.0;
     float a2 = 0.0;
+    // float b2 = 0.0;
     float c2 = 0.0;
 } Parabola;
 
@@ -35,12 +36,15 @@ Parabola swap(Parabola param) {
 
     float temp1, temp2, temp3;
     temp1=param.a1;
+    // temp2=param.b1;
     temp3=param.c1;
 
     param.a1=param.a2;
+    // param.b1=param.b2;
     param.c1=param.c2;
 
     param.a2=temp1;
+    // param.b2=temp2;
     param.c2=temp3;
 
     return param;
@@ -51,8 +55,10 @@ float get_a(Point p1, Point p2)
 {
     int x1 = p1.x;
     int x2 = p2.x;
+    // int x3 = p3.x;
     int y1 = p1.y;
     int y2 = p2.y;
+    // int y3 = p3.y;
 
     float del = (y1 - y2)*(y1 + y2);
     float del_a = (x1 - x2);
@@ -65,6 +71,18 @@ float get_a(Point p1, Point p2)
         return a;
 }
 
+// float get_b(Point p1, Point p2, Point p3)
+// {
+//     int x1 = p1.x;
+//     int x2 = p2.x;
+//     int x3 = p3.x;
+//     int y1 = p1.y;
+//     int y2 = p2.y;
+//     int y3 = p3.y;
+//     float del = (y2 - y1)*(y3 - y2)*(y1 - y3);
+//     float del_b = (x3 - x2)*((y2*y2) - (y1*y1)) - (x2 - x1)*((y3*y3) - (y2*y2));
+//     return(del_b / del);
+// }
 float get_c(Point p1, Point p2)
 {
     int x1 = p1.x;
@@ -81,9 +99,9 @@ float get_c(Point p1, Point p2)
 
 float min(float a, float b)
 {
-    if(a<=b)
-        return a;
-    return b;
+	if(a<=b)
+		return a;
+	return b;
 }
 
 //calculate distance of passed point from curve
@@ -98,6 +116,8 @@ float get_del(Point p, float a, float c)
 
     return min(errorx, errory);
 }
+
+
 
 //removes both the lanes if they intersect within the image frame
 bool isIntersectingLanes(Mat img, Parabola param) {
@@ -120,7 +140,12 @@ bool isIntersectingLanes(Mat img, Parabola param) {
 
 }
 
+
+
 //choose Parabola parameters of best fit curve basis on randomly selected 3 points
+
+
+
 Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
 {
     int numDataPts = ptArray.size();
@@ -137,6 +162,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
 
     //check for no lane case here
 
+    cout<<"1"<<endl;
     // loop of iterations
     for(int i = 0; i < iteration; i++)
     {
@@ -147,6 +173,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
             i--;
             continue;
         }
+        cout<<"2"<<endl;
         //#TODO points with same x or y should not be passed in (p[0],p[1])&(p[2]&p[3]) 
 
 
@@ -183,6 +210,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
             i--;
             continue;
         }
+        cout<<"3"<<endl;
 
         Parabola tempParam; 
         tempParam.a1 = get_a(ran_points[0], ran_points[1]);
@@ -192,19 +220,24 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
         tempParam.a2 = get_a(ran_points[2], ran_points[3]); 
         tempParam.c2 = get_c(ran_points[2], ran_points[3]);
 
+        cout<<"a1:"<<tempParam.a1<<" c1:"<<tempParam.c1<<endl;
 
+        // cout << "Centroid Dif : " << dist(centroid(tempParam.a1,tempParam.c1,img),centroid(tempParam.a2,tempParam.c2,img)) << endl;
 
         if (dist(centroid(tempParam.a1,tempParam.c1,img),centroid(tempParam.a2,tempParam.c2,img)) < 80.0)
             continue;
+        cout<<"4"<<endl;
 
         if(fabs(tempParam.c1 - tempParam.c2) < 40.0)
             continue;
+        cout<<"5"<<endl;
 
         // intersection only in top 3/8 part of the image taken
         if( isIntersectingLanes(img, tempParam)) {
             i--;
             continue;
         }
+        cout<<"6"<<endl;
 
         //similar concavity of lanes
 
@@ -258,9 +291,12 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
         // float lane_length_r = 1;
         // float metric_l = score_l_loc/lane_length_l;
         // float metric_r = score_r_loc/lane_length_r;
+        cout << "score_l_loc: " << score_l_loc << endl;
+        cout << "score_r_loc: " << score_r_loc << endl;
 
         if(score_r_loc==0 || score_l_loc==0)
             continue;
+        cout << "Common : " << score_common << endl;
 
         if ((score_common/(score_common + score_l_loc + score_r_loc))*100 > common_inliers_thresh) {
             i--;
@@ -301,6 +337,7 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
             p2_g = p2;
             p3_g = p3;
             p4_g = p4;
+            cout<<score_gl<<'\t';
             // comm_count_gl = comm_count;
             */
 
@@ -317,6 +354,9 @@ Parabola ransac(vector<Point> ptArray, Parabola param, Mat img)
         bestTempParam.c2=0;
         bestTempParam.numModel--;
     }
+    cout << "score_l_gl: " << score_l_gl << endl;
+    cout << "score_r_gl: " << score_r_gl << endl;
+    cout << "bestTempParam.numModel : "<<bestTempParam.numModel<<endl;
     return bestTempParam;
 }
 
@@ -357,6 +397,8 @@ Parabola getRansacModel(Mat img,Parabola previous)
     }
 
     Mat plot_grid(img.rows,img.cols,CV_8UC1,Scalar(0));
+    // cout << "grid_size: " << grid_size << endl;
+    // cout << "grid_white_thresh: " << grid_white_thresh << endl;
     for(int i=((grid_size-1)/2);i<img.rows-(grid_size-1)/2;i+=grid_size)
     {
         for(int j=((grid_size-1)/2);j<img.cols-(grid_size-1)/2;j+=grid_size)
@@ -376,15 +418,18 @@ Parabola getRansacModel(Mat img,Parabola previous)
                 ptArray1.push_back(Point(j , img.rows - i));
         }
     }
+    cout << "ptArray1: " << ptArray1.size() << endl;
 
     namedWindow("grid",0);
     imshow("grid",plot_grid);
 
     //declare a Parabola vaiable to store the Parabola
     Parabola param;
+    cout<<"ransac th"<<minPointsForRANSAC<<endl;
     //get parameters of first Parabola form ransac function
     if(ptArray1.size() > minPointsForRANSAC)
     {
+        cout<<"No of pts "<<ptArray1.size()<<endl;
         param = ransac(ptArray1, param, img);
     }
 
